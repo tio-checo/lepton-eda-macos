@@ -353,12 +353,19 @@ eda_renderer_set_property (GObject *object, guint property_id,
                                   PANGO_CONTEXT (g_value_get_pointer (value)));
     break;
   case PROP_FONT_NAME:
+  {
+    const gchar *font_name = g_value_get_string (value);
+    /* An empty configuration value means the default font. In particular,
+     * CoreText needs a family name when Pango requests font metrics. */
+    gchar *new_font_name = g_strdup (font_name != NULL && *font_name != '\0'
+                                     ? font_name : DEFAULT_FONT_NAME);
     if (renderer->priv->font_name != NULL)
       g_free (renderer->priv->font_name);
-    renderer->priv->font_name = g_value_dup_string (value);
+    renderer->priv->font_name = new_font_name;
     /* Clear font metrics cache */
     g_hash_table_remove_all (renderer->priv->metrics_cache);
     break;
+  }
   case PROP_COLOR_MAP:
     renderer->priv->color_map = (GArray*) g_value_get_pointer (value);
     break;
