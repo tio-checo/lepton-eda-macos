@@ -1,12 +1,34 @@
-Lepton Electronic Design Automation
-===================================
+Lepton EDA for macOS (experimental fork)
+=======================================
+
+This repository is a macOS-focused fork of
+[Lepton EDA](https://github.com/lepton-eda/lepton-eda). It uses Lepton's existing
+GTK3 support with the native Quartz backend, without requiring an X11 server or
+XQuartz. It preserves the schematic and symbol formats used by Lepton and gEDA.
+
+The fork adds fixes for drawing-context lifetime, empty font settings, window
+geometry restoration and the Quartz clipboard, together with build scripts,
+targeted tests and tools for creating a relocatable `LeptonEDA.app`.
+
+The current build targets Apple Silicon with Homebrew in `/opt/homebrew`.
+Homebrew is required for building; the standalone application bundles its runtime
+dependencies. Intel Macs and older macOS versions have not been validated. The
+application is a development build with an ad hoc signature, without Apple
+notarization.
+
+- [macOS dependencies, build instructions and application packaging](contrib/macos/README.md)
+- [Validation results and known limitations](contrib/macos/VALIDATION.md)
+- [Report issues specific to this fork](https://github.com/tio-checo/lepton-eda-macos/issues)
+
+The general Lepton EDA documentation follows below. The full upstream tool list
+does not describe the contents of the macOS application bundle; see the macOS
+guide for its supported tools and limitations.
+
+Upstream community chat:
 [![Join the chat at https://app.gitter.im/#/room/#Lepton-EDA_Lobby:gitter.im](https://badges.gitter.im/Join%20Chat.svg)](https://app.gitter.im/#/room/#Lepton-EDA_Lobby:gitter.im)
 
 Introduction
 ============
-
-For the experimental native macOS GTK3/Quartz build and standalone application,
-see [contrib/macos/README.md](contrib/macos/README.md).
 
 Lepton EDA is a suite of free software tools for designing
 electronics. It provides schematic capture, netlisting into
