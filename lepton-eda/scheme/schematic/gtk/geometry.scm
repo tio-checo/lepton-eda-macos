@@ -84,10 +84,16 @@ CONFIG-GROUP of the cache config context.  Unless valid
 configuration values are read, the default width and height are
 used."
   (define cache-config (cache-config-context))
-  (define x (config-int cache-config config-group "x"))
-  (define y (config-int cache-config config-group "y"))
-  (define width (config-int cache-config config-group "width"))
-  (define height (config-int cache-config config-group "height"))
+  ;; On first startup the cache has no geometry group. Treat missing or
+  ;; malformed cached integers as absent, so defaults remain usable.
+  (define (cached-int key)
+    (catch 'config-error
+      (lambda () (config-int cache-config config-group key))
+      (lambda _ -1)))
+  (define x (cached-int "x"))
+  (define y (cached-int "y"))
+  (define width (cached-int "width"))
+  (define height (cached-int "height"))
 
   (when (and (>= x 0) (>= y 0))
     (gtk_window_move *window x y))

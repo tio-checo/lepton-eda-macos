@@ -16,3 +16,7 @@ version.h
 TAGS
 tags
 .tags*
+# Local macOS build, installation, tests and application bundle.
+/build/macos/
+/dist/LeptonEDA.app/
+/contrib/macos/__pycache__/

@@ -985,6 +985,11 @@ schematic_draw_rect (SchematicWindow *w_current,
   }
 
   g_list_free (obj_list);
+#ifdef ENABLE_GTK3
+  /* GTK's draw context belongs to this frame.  Do not retain its surface
+   * across draws: the Quartz window backing store can change on resize. */
+  g_object_set (G_OBJECT (renderer), "cairo-context", NULL, NULL);
+#endif
   g_object_unref (G_OBJECT (renderer));
   g_array_free (render_color_map, TRUE);
   g_array_free (render_outline_color_map, TRUE);

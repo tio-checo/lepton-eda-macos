@@ -48,6 +48,16 @@ eda_get_system_data_dirs()
 
   if (g_once_init_enter (&system_data_dirs))
   {
+    /* Relocatable installations may supply their complete system data
+     * directory instead of retaining the prefix used at build time. */
+    const gchar *override = g_getenv ("LEPTON_DATA_DIR");
+    if (override != NULL && g_path_is_absolute (override))
+    {
+      const gchar **result = g_new0 (const gchar *, 2);
+      result[0] = g_strdup (override);
+      g_once_init_leave (&system_data_dirs, result);
+      return system_data_dirs;
+    }
     const gchar* const* dirs = g_get_system_data_dirs();
 
     /* determine [dirs] array size:
@@ -97,6 +107,15 @@ eda_get_system_config_dirs()
 
   if (g_once_init_enter (&system_config_dirs))
   {
+    /* System configuration is installed alongside Lepton's shared data. */
+    const gchar *override = g_getenv ("LEPTON_DATA_DIR");
+    if (override != NULL && g_path_is_absolute (override))
+    {
+      const gchar **result = g_new0 (const gchar *, 2);
+      result[0] = g_strdup (override);
+      g_once_init_leave (&system_config_dirs, result);
+      return system_config_dirs;
+    }
     const gchar* const* dirs = g_get_system_config_dirs();
 
     /* determine [dirs] array size:

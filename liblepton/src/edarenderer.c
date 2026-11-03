@@ -126,6 +126,7 @@ static void eda_renderer_set_property (GObject *object, guint property_id,
 static void eda_renderer_get_property (GObject *object, guint property_id,
                                        GValue *value, GParamSpec *pspec);
 static void eda_renderer_update_contexts (EdaRenderer *renderer, cairo_t *new_cr,
+                                         gboolean replace_cr,
                                           PangoContext *new_pc);
 
 static void eda_renderer_set_color (EdaRenderer *renderer, int color);
@@ -344,19 +345,27 @@ eda_renderer_set_property (GObject *object, guint property_id,
   case PROP_CAIRO_CONTEXT:
     eda_renderer_update_contexts (renderer,
                                   (cairo_t *) g_value_get_pointer (value),
+                                  TRUE,
                                   NULL);
     break;
   case PROP_PANGO_CONTEXT:
-    eda_renderer_update_contexts (renderer, NULL,
+    eda_renderer_update_contexts (renderer, NULL, FALSE,
                                   PANGO_CONTEXT (g_value_get_pointer (value)));
     break;
   case PROP_FONT_NAME:
+  {
+    const gchar *font_name = g_value_get_string (value);
+    /* An empty configuration value means the default font. In particular,
+     * CoreText needs a family name when Pango requests font metrics. */
+    gchar *new_font_name = g_strdup (font_name != NULL && *font_name != '\0'
+                                     ? font_name : DEFAULT_FONT_NAME);
     if (renderer->priv->font_name != NULL)
       g_free (renderer->priv->font_name);
-    renderer->priv->font_name = g_value_dup_string (value);
+    renderer->priv->font_name = new_font_name;
     /* Clear font metrics cache */
     g_hash_table_remove_all (renderer->priv->metrics_cache);
     break;
+  }
   case PROP_COLOR_MAP:
     renderer->priv->color_map = (GArray*) g_value_get_pointer (value);
     break;
@@ -409,10 +418,14 @@ eda_renderer_get_property (GObject *object, guint property_id,
 
 static void
 eda_renderer_update_contexts (EdaRenderer *renderer, cairo_t *new_cr,
+                              gboolean replace_cr,
                               PangoContext *new_pc)
 {
   /* First figure out what's invalidated */
-  if (new_cr != NULL) {
+  if (replace_cr) {
+    /* Acquire the new reference first, including when reusing the context. */
+    if (new_cr != NULL)
+      cairo_reference (new_cr);
     cairo_destroy (renderer->priv->cr);
     renderer->priv->cr = NULL;
     if (renderer->priv->pr != NULL) {
@@ -433,7 +446,7 @@ eda_renderer_update_contexts (EdaRenderer *renderer, cairo_t *new_cr,
       }
     }
 
-    renderer->priv->cr = cairo_reference (new_cr);
+    renderer->priv->cr = new_cr;
   }
 
   if (new_pc != NULL) {
