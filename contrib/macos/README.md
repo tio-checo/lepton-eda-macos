@@ -50,7 +50,8 @@ Homebrew. The bundle below is relocatable.
 
 `check.sh` exercises renderer context ownership, font defaults, missing and
 malformed geometry cache, relocatable data/config paths, and the upstream
-`liblepton` tests. These checks do not replace manual GUI testing or the full
+`liblepton` tests. It also checks window/toplevel context when reopening recent
+files. These checks do not replace manual GUI testing or the full
 upstream test suite.
 
 ## Build the application

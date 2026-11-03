@@ -296,8 +296,12 @@
   ;; Free the returned C string.
   (g_free *filename)
 
-  (window-set-current-page! window
-                            (window-open-page! window filename)))
+  ;; GTK invokes this signal after activation has returned, outside the
+  ;; dynamic context of any window. Page loading needs both window and
+  ;; toplevel bindings, just like startup and toolbar actions do.
+  (with-window *window
+    (window-set-current-page! window
+                              (window-open-page! window filename))))
 
 
 ;;; C callback for the above function.

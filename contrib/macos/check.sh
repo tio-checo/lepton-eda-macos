@@ -20,4 +20,5 @@ for override in /private/tmp/lepton-test-data relative ''; do
   LEPTON_DATA_DIR="$override" ./bundle-data-path-test "$prefix/share/lepton-eda"
 done
 sh "$tools/run.sh" lepton-cli shell -s "$tools/tests/geometry-cache-test.scm"
+sh "$tools/run.sh" lepton-cli shell -s "$tools/tests/recent-file-context-test.scm"
 make -C "$root/build/macos/build/liblepton" check

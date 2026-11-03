@@ -23,6 +23,15 @@ line runtime checks.
 
 ## Source fixes
 
+- Bind the window and toplevel context in the recent-file activation callback.
+  GTK3 invokes this callback outside the startup context; opening a recent file
+  otherwise exits with "Current window is unavailable." A regression test
+  checks both bindings during opening and page selection, and restoration of
+  the previous context. All ten assertions pass after the fix; four fail on
+  the previous version. Opening a private schematic through the real callback
+  was also verified in an isolated GUI instance, without saving the document.
+  The user confirmed successful reopening from the recent-file list in the
+  updated installed application.
 - Release the GTK3 frame's Cairo context after drawing. The renderer supports
   explicitly clearing its context and safely reassigning the same context.
   The targeted test repeats attach/reuse/release 100 times. Manual window
