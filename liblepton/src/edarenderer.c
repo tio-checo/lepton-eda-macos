@@ -126,6 +126,7 @@ static void eda_renderer_set_property (GObject *object, guint property_id,
 static void eda_renderer_get_property (GObject *object, guint property_id,
                                        GValue *value, GParamSpec *pspec);
 static void eda_renderer_update_contexts (EdaRenderer *renderer, cairo_t *new_cr,
+                                         gboolean replace_cr,
                                           PangoContext *new_pc);
 
 static void eda_renderer_set_color (EdaRenderer *renderer, int color);
@@ -344,10 +345,11 @@ eda_renderer_set_property (GObject *object, guint property_id,
   case PROP_CAIRO_CONTEXT:
     eda_renderer_update_contexts (renderer,
                                   (cairo_t *) g_value_get_pointer (value),
+                                  TRUE,
                                   NULL);
     break;
   case PROP_PANGO_CONTEXT:
-    eda_renderer_update_contexts (renderer, NULL,
+    eda_renderer_update_contexts (renderer, NULL, FALSE,
                                   PANGO_CONTEXT (g_value_get_pointer (value)));
     break;
   case PROP_FONT_NAME:
@@ -409,10 +411,14 @@ eda_renderer_get_property (GObject *object, guint property_id,
 
 static void
 eda_renderer_update_contexts (EdaRenderer *renderer, cairo_t *new_cr,
+                              gboolean replace_cr,
                               PangoContext *new_pc)
 {
   /* First figure out what's invalidated */
-  if (new_cr != NULL) {
+  if (replace_cr) {
+    /* Acquire the new reference first, including when reusing the context. */
+    if (new_cr != NULL)
+      cairo_reference (new_cr);
     cairo_destroy (renderer->priv->cr);
     renderer->priv->cr = NULL;
     if (renderer->priv->pr != NULL) {
@@ -433,7 +439,7 @@ eda_renderer_update_contexts (EdaRenderer *renderer, cairo_t *new_cr,
       }
     }
 
-    renderer->priv->cr = cairo_reference (new_cr);
+    renderer->priv->cr = new_cr;
   }
 
   if (new_pc != NULL) {
