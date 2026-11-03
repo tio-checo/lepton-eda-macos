@@ -28,8 +28,23 @@
 
 #include "schematic.h"
 
+#ifdef GDK_WINDOWING_QUARTZ
+#include <gdk/gdkquartz.h>
+#endif
+
 #define MIME_TYPE_SCHEMATIC "application/x-lepton-schematic"
+#define QUARTZ_TYPE_SCHEMATIC "org.lepton-eda.schematic"
 #define CLIP_TYPE_SCHEMATIC 1
+
+static gboolean
+clipboard_uses_quartz (GtkClipboard *cb)
+{
+#ifdef GDK_WINDOWING_QUARTZ
+  return GDK_IS_QUARTZ_DISPLAY (gtk_clipboard_get_display (cb));
+#else
+  return FALSE;
+#endif
+}
 
 /* \brief Callback for handling system clipboard owner change.
  * \par Function Description
@@ -124,9 +139,12 @@ query_usable_targets_cb (GtkClipboard *clip, GdkAtom *targets, gint ntargets,
   struct query_usable *cbinfo = (struct query_usable*) data;
   int i;
   int is_usable = FALSE;
+  GdkAtom schematic = gdk_atom_intern_static_string (MIME_TYPE_SCHEMATIC);
+  GdkAtom quartz = gdk_atom_intern_static_string (QUARTZ_TYPE_SCHEMATIC);
 
   for (i = 0; i < ntargets; i++) {
-    if (strcmp (gdk_atom_name (targets[i]), MIME_TYPE_SCHEMATIC) == 0) {
+    if (targets[i] == schematic ||
+        (clipboard_uses_quartz (clip) && targets[i] == quartz)) {
       is_usable = TRUE;
       break;
     }
@@ -180,8 +198,10 @@ x_clipboard_set (SchematicWindow *w_current,
                  const GList *object_list)
 {
   GtkClipboard *cb = gtk_clipboard_get (GDK_SELECTION_CLIPBOARD);
-  GtkTargetEntry target = { (gchar*) MIME_TYPE_SCHEMATIC, 0,
-                            CLIP_TYPE_SCHEMATIC };
+  GtkTargetEntry targets[] = {
+    { (gchar*) MIME_TYPE_SCHEMATIC, 0, CLIP_TYPE_SCHEMATIC },
+    { (gchar*) QUARTZ_TYPE_SCHEMATIC, 0, CLIP_TYPE_SCHEMATIC }
+  };
   gboolean result;
 
   /* Clear the clipboard buffer */
@@ -193,7 +213,11 @@ x_clipboard_set (SchematicWindow *w_current,
     lepton_object_list_copy (object_list, w_current->clipboard_buffer);
 
   /* Advertise that the data is available */
-  result = gtk_clipboard_set_with_data (cb, &target, 1,
+  /* GTK 3.24 Quartz converts MIME names to UTIs when writing, but reads
+   * custom types by their literal target name. Advertise a native alias
+   * as well so reading uses the same pasteboard name as writing. */
+  result = gtk_clipboard_set_with_data (cb, targets,
+                                        clipboard_uses_quartz (cb) ? 2 : 1,
                                         clip_get, clip_clear, w_current);
 
   /* Hint that the data can be stored to be accessed after the program
@@ -220,23 +244,45 @@ x_clipboard_get (SchematicWindow *w_current)
   GtkSelectionData *selection_data;
   GList *object_list = NULL;
   const guchar *buf;
+  gint length;
   GError * err = NULL;
   LeptonPage *active_page = schematic_window_get_active_page (w_current);
 
   /* Try to get the contents of the clipboard */
-  selection_data = gtk_clipboard_wait_for_contents (cb, type);
-  if (selection_data == NULL) return FALSE;
+  if (clipboard_uses_quartz (cb)) {
+    type = gdk_atom_intern_static_string (QUARTZ_TYPE_SCHEMATIC);
+    selection_data = gtk_clipboard_wait_for_contents (cb, type);
+    if (selection_data != NULL &&
+        gtk_selection_data_get_length (selection_data) <= 0) {
+      gtk_selection_data_free (selection_data);
+      selection_data = NULL;
+    }
+    if (selection_data == NULL)
+      type = gdk_atom_intern_static_string (MIME_TYPE_SCHEMATIC);
+  } else {
+    selection_data = NULL;
+  }
+  if (selection_data == NULL)
+    selection_data = gtk_clipboard_wait_for_contents (cb, type);
+  if (selection_data == NULL) return NULL;
 
   /* Convert the data buffer to LeptonObjects */
 #if GTK_CHECK_VERSION(2,14,0)
   buf = gtk_selection_data_get_data (selection_data);
+  length = gtk_selection_data_get_length (selection_data);
 #else
   buf = selection_data->data;
+  length = selection_data->length;
 #endif
+
+  if (buf == NULL || length <= 0) {
+    gtk_selection_data_free (selection_data);
+    return NULL;
+  }
 
   active_page = schematic_window_get_active_page (w_current);
   object_list = o_read_buffer (active_page, object_list,
-                               (gchar *) buf, -1, "Clipboard", &err);
+                               (gchar *) buf, length, "Clipboard", &err);
 
   if (err) {
     GtkWidget *main_window =
