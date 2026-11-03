@@ -5,6 +5,9 @@ Lepton Electronic Design Automation
 Introduction
 ============
 
+For the experimental native macOS GTK3/Quartz build and standalone application,
+see [contrib/macos/README.md](contrib/macos/README.md).
+
 Lepton EDA is a suite of free software tools for designing
 electronics. It provides schematic capture, netlisting into
 over 30 netlist formats, and many other features. It was forked
