@@ -19,4 +19,4 @@ tags
 # Local macOS build, installation, tests and application bundle.
 /build/macos/
 /dist/LeptonEDA.app/
-/contrib/macos/__pycache__/
+/contrib/macos/**/__pycache__/

@@ -4,6 +4,19 @@ import collections, hashlib, json, os, pathlib, plistlib, re, shutil, subprocess
 TOOLS=pathlib.Path(__file__).resolve().parent
 ROOT=TOOLS.parents[1]
 PREFIX=ROOT/'build/macos/install'
+GTK_PREFIX=pathlib.Path(os.environ.get('LEPTON_GTK_PREFIX', ROOT/'build/macos/gtk/install')).resolve()
+GTK_MANIFEST=GTK_PREFIX.parent/'manifest.json'
+if not GTK_MANIFEST.exists():
+    raise SystemExit('Prepare patched GTK first: python3 contrib/macos/prepare-gtk.py')
+gtk_manifest=json.loads(GTK_MANIFEST.read_text())
+gtk_patch=TOOLS/'patches/gtk3-quartz-print-preview.patch'
+if gtk_manifest.get('patch_sha256') != hashlib.sha256(gtk_patch.read_bytes()).hexdigest():
+    raise SystemExit('Patched GTK is stale; rebuild it in a fresh work directory')
+if not gtk_manifest.get('libraries'):
+    raise SystemExit('Missing GTK library checksums')
+for name, sha in gtk_manifest['libraries'].items():
+    if hashlib.sha256((GTK_PREFIX/'lib'/name).read_bytes()).hexdigest() != sha:
+        raise SystemExit(f'Patched GTK checksum mismatch: {name}')
 OUT=ROOT/'dist/LeptonEDA.app'
 if OUT.exists():
     raise SystemExit('dist/LeptonEDA.app exists; move it aside before rebuilding')
@@ -57,7 +70,7 @@ plist={'CFBundleExecutable':'LeptonEDA','CFBundleIdentifier':'local.lepton-eda.Q
 with (CONT/'Info.plist').open('wb') as f: plistlib.dump(plist,f)
 # Dynamic modules are roots too; they are not in otool's static closure.
 roots=[(PREFIX/'lib/liblepton.dylib',FW/'liblepton.11.dylib'),(PREFIX/'lib/libleptongui.dylib',FW/'libleptongui.5.dylib')]
-modules=[('/opt/homebrew/lib/gtk-3.0/3.0.0/printbackends','lib/gtk-3.0/3.0.0/printbackends'),('/opt/homebrew/lib/gdk-pixbuf-2.0/2.10.0/loaders','lib/gdk-pixbuf-2.0/2.10.0/loaders'),('/opt/homebrew/opt/guile/lib/guile/3.0/extensions','lib/guile/3.0/extensions')]
+modules=[(GTK_PREFIX/'lib/gtk-3.0/3.0.0/printbackends','lib/gtk-3.0/3.0.0/printbackends'),('/opt/homebrew/lib/gdk-pixbuf-2.0/2.10.0/loaders','lib/gdk-pixbuf-2.0/2.10.0/loaders'),('/opt/homebrew/opt/guile/lib/guile/3.0/extensions','lib/guile/3.0/extensions')]
 module_links=[]
 for src,dst in modules:
     for p in pathlib.Path(src).glob('*.so'):
@@ -79,6 +92,10 @@ def system(path): return path.startswith('/usr/lib/') or path.startswith('/Syste
 def dependencies(src):
     return [line.strip().split(' (compatibility')[0] for line in run('/usr/bin/otool','-L',src).splitlines()[1:]]
 def resolve(dep,src):
+    if pathlib.Path(dep).name.startswith(('libgtk-3.', 'libgdk-3.')):
+        replacement=GTK_PREFIX/'lib'/pathlib.Path(dep).name
+        if not replacement.is_file(): raise RuntimeError(f'Missing patched GTK dependency: {dep}')
+        return replacement.resolve()
     if dep.startswith('@loader_path/'):
         return (src.parent/dep[len('@loader_path/'):]).resolve()
     if dep.startswith('@rpath/'):
@@ -157,15 +174,26 @@ shutil.copy2(ROOT/'COPYING',licenses/'Lepton-COPYING')
 # Preserve the exact Lepton source and local changes used for this build.
 source_dir=RES/'source'; source_dir.mkdir()
 subprocess.run(['git','-C',str(ROOT),'archive','--format=tar.gz','-o',str(source_dir/'lepton-eda-source.tar.gz'),'HEAD'],check=True)
-(source_dir/'local-changes.patch').write_text(run('git','-C',ROOT,'diff','HEAD')+'\n')
-(source_dir/'packaging').mkdir()
-for name in ['bundle-launcher.c','build-app.py','audit-app.py']:
-    shutil.copy2(TOOLS/name,source_dir/'packaging'/name)
+local_changes=run('git','-C',ROOT,'diff','HEAD')+'\n'
+# Include new packaging files during local verification before a commit.
+for name in run('git','-C',ROOT,'ls-files','--others','--exclude-standard','--','contrib/macos').splitlines():
+    delta=subprocess.run(['git','diff','--no-index','--','/dev/null',name],cwd=ROOT,text=True,capture_output=True)
+    if delta.returncode not in (0,1): raise RuntimeError(delta.stderr)
+    local_changes+=delta.stdout
+(source_dir/'local-changes.patch').write_text(local_changes)
+copytree(TOOLS,source_dir/'packaging',shutil.ignore_patterns('__pycache__'))
+# Distribute the exact LGPL dependency source, patch and build procedure too.
+gtk_source=source_dir/'gtk'; gtk_source.mkdir()
+shutil.copy2(GTK_PREFIX.parent/f"gtk-{gtk_manifest['version']}.tar.xz",gtk_source)
+shutil.copy2(gtk_patch,gtk_source)
+shutil.copy2(GTK_MANIFEST,gtk_source/'manifest.json')
+gtk_license=licenses/f"gtk-source-{gtk_manifest['version']}"; gtk_license.mkdir()
+shutil.copy2(GTK_PREFIX.parent/f"gtk-{gtk_manifest['version']}"/'COPYING',gtk_license)
 # Fresh ad hoc signatures are required after changing signed arm64 images.
 for dst in destinations:
     subprocess.run(['/usr/bin/codesign','--force','--sign','-',str(dst)],check=True,capture_output=True)
 subprocess.run(['/usr/bin/codesign','--force','--sign','-',str(OUT)],check=True,capture_output=True)
-manifest={'lepton_commit':run('git','-C',ROOT,'rev-parse','HEAD'),'architecture':'arm64','ad_hoc_signed':True,'notarized':False,'libraries':{str(dst.relative_to(CONT)):str(src) for dst,src in destinations.items()},'source_patch_sha256':hashlib.sha256(run('git','-C',ROOT,'diff','HEAD').encode()).hexdigest()}
+manifest={'lepton_commit':run('git','-C',ROOT,'rev-parse','HEAD'),'architecture':'arm64','ad_hoc_signed':True,'notarized':False,'gtk':gtk_manifest,'libraries':{str(dst.relative_to(CONT)):str(src) for dst,src in destinations.items()},'source_patch_sha256':hashlib.sha256(local_changes.encode()).hexdigest()}
 (ROOT/'build/macos/reports').mkdir(parents=True,exist_ok=True)
 (ROOT/'build/macos/reports/build-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
 print(OUT)

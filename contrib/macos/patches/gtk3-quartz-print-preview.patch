@@ -1,0 +1,99 @@
+--- a/gtk/gtkprintoperation-unix.c
++++ b/gtk/gtkprintoperation-unix.c
+@@ -247,6 +247,49 @@
+   return preview_cmd;
+ }
+ 
++#ifdef GDK_WINDOWING_QUARTZ
++/* Native PDF viewers do not implement Evince's --unlink-tempfile protocol.
++ * Keep previews readable after launch and expire only our private cache files.
++ */
++static gchar *
++quartz_preview_directory (GError **error)
++{
++  gchar *directory = g_build_filename (g_get_user_cache_dir (), "gtk-3.0",
++                                       "print-preview", NULL);
++  GDir *dir;
++  const gchar *name;
++  gint64 cutoff = g_get_real_time () / G_USEC_PER_SEC - 7 * 24 * 60 * 60;
++
++  if (g_mkdir_with_parents (directory, 0700) != 0)
++    {
++      g_set_error (error, G_FILE_ERROR, g_file_error_from_errno (errno),
++                   "Cannot create print preview directory: %s", g_strerror (errno));
++      g_free (directory);
++      return NULL;
++    }
++
++  dir = g_dir_open (directory, 0, NULL);
++  if (dir != NULL)
++    {
++      while ((name = g_dir_read_name (dir)) != NULL)
++        {
++          gchar *path;
++          GStatBuf st;
++          if (!g_str_has_prefix (name, "gtk-preview-") ||
++              !g_str_has_suffix (name, ".pdf"))
++            continue;
++          path = g_build_filename (directory, name, NULL);
++          if (g_lstat (path, &st) == 0 && S_ISREG (st.st_mode) &&
++              st.st_mtime < cutoff)
++            g_unlink (path);
++          g_free (path);
++        }
++      g_dir_close (dir);
++    }
++  return directory;
++}
++#endif
++
+ G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+ static void
+ gtk_print_operation_unix_launch_preview (GtkPrintOperation *op,
+@@ -274,7 +317,27 @@
+   gboolean retval;
+ 
+   cairo_surface_destroy (surface);
+- 
++
++#ifdef GDK_WINDOWING_QUARTZ
++  /* GOsxAppInfo cannot create application descriptors from command lines.
++   * Launch the finished PDF through Launch Services instead. Do not create
++   * Evince print-settings files: native viewers cannot consume them.
++   */
++  {
++    gchar *uri = g_filename_to_uri (filename, NULL, &error);
++    if (uri == NULL || !g_app_info_launch_default_for_uri (uri, NULL, &error))
++      {
++        g_unlink (filename);
++        if (op->priv->error == NULL)
++          op->priv->error = error;
++        else
++          g_clear_error (&error);
++      }
++    g_free (uri);
++    return;
++  }
++#endif
++
+   if (parent)
+     screen = gtk_window_get_screen (parent);
+   else
+@@ -843,7 +906,17 @@
+   cairo_surface_t *surface;
+   static cairo_user_data_key_t key;
+   
++#ifdef GDK_WINDOWING_QUARTZ
++  {
++    gchar *directory = quartz_preview_directory (NULL);
++    if (directory == NULL)
++      return NULL;
++    filename = g_build_filename (directory, "gtk-preview-XXXXXX.pdf", NULL);
++    g_free (directory);
++  }
++#else
+   filename = g_build_filename (g_get_tmp_dir (), "previewXXXXXX.pdf", NULL);
++#endif
+   fd = g_mkstemp (filename);
+ 
+   if (fd < 0)

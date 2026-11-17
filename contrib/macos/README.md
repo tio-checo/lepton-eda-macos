@@ -13,7 +13,7 @@ Then install the build tools and runtime data:
 ```sh
 brew install autoconf automake libtool pkgconf gettext texinfo flex gawk groff \
   guile gtk+3 adwaita-icon-theme hicolor-icon-theme shared-mime-info \
-  gsettings-desktop-schemas librsvg python
+  gsettings-desktop-schemas librsvg python meson ninja
 ```
 
 The scripts use a clean environment with Homebrew's compiler tools and
@@ -59,10 +59,49 @@ upstream test suite.
 After a successful build and checks:
 
 ```sh
+python3 contrib/macos/prepare-gtk.py
 python3 contrib/macos/build-app.py
 python3 contrib/macos/audit-app.py dist/LeptonEDA.app
 open dist/LeptonEDA.app
 ```
+
+`prepare-gtk.py` downloads GTK 3.24.52, verifies its pinned SHA256, applies
+`patches/gtk3-quartz-print-preview.patch`, and builds a private Quartz copy in
+`build/macos/gtk/`. It leaves Homebrew unchanged. Meson and Ninja may also be
+provided with `--meson /absolute/path/to/meson --ninja /absolute/path/to/ninja`.
+For a custom `--work` directory, set `LEPTON_GTK_PREFIX` to its `install/`
+subdirectory when running `build-app.py`. A matching completed build is reused;
+changed patches require a fresh work directory. The bundle includes the exact
+GTK source archive, patch and build recipe.
+
+On Quartz, Print Preview opens the generated PDF in the default macOS PDF
+application through Launch Services. This replaces GTK's unsupported
+`g_app_info_create_from_commandline()` path; drawing and page setup still use
+the original GTK print operation. Previews are kept in
+`~/Library/Application Support/LeptonEDA-Quartz/cache/gtk-3.0/print-preview/`.
+Each preview has a unique name and private file permissions. On the next preview,
+only matching cache PDFs older than seven days are removed; a failed launch
+removes its PDF immediately. Custom `LEPTON_BUNDLE_PROFILE` values isolate this
+cache too. Native PDF applications do not consume GTK/Evince's temporary print
+settings file, so none is created for them.
+
+The optional Quartz regression check runs the real GTK preview renderer and
+captures the native viewer launch with a test-only interposer. It verifies the
+original error, successful rendering, URI encoding, expiration and launch
+failure cleanup, and ordinary PDF export. It needs a graphical macOS session:
+
+```sh
+python3 contrib/macos/tests/check-print-preview.py --work /private/tmp/lepton-preview-check
+# Add --native to also open a real PDF viewer, or select the finished bundle:
+python3 contrib/macos/tests/check-print-preview.py \
+  --library-dir dist/LeptonEDA.app/Contents/Frameworks \
+  --work /private/tmp/lepton-bundle-preview-check --native \
+  --app dist/LeptonEDA.app
+```
+
+Use a new or empty test work directory. `--app` also calls Lepton's real
+`x_print` with the bundled TwoStageAmp example in an isolated profile; a
+test-only interposer selects preview without interacting with a printer.
 
 The builder refuses to overwrite an existing application. Move the previous
 bundle aside before rebuilding. It copies dependencies and runtime resources,

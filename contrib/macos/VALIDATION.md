@@ -23,6 +23,20 @@ line runtime checks.
 
 ## Source fixes
 
+- Build a private GTK 3.24.52 with a Quartz print-preview fix. It opens the
+  completed PDF using `g_app_info_launch_default_for_uri()` instead of the
+  unsupported macOS command-line application descriptor API. Previews expire
+  after seven days on the next preview; launch failures delete the generated
+  file immediately. The regression check reproduces the unpatched error and
+  exercises actual GTK rendering, successful launch capture, Unicode/space URI
+  encoding, private permissions, selective cache cleanup, launch errors and
+  ordinary export. On 2026-11-17 these checks passed with the private GTK and
+  the relocated bundle. A real Launch Services launch succeeded; the actual
+  Lepton `x_print` function also produced a valid preview of TwoStageAmp in an
+  isolated profile. PDFKit confirmed A4 landscape page dimensions. The user
+  confirmed that the installed application's Print Preview button successfully
+  opens the schematic in Acrobat Reader, their default PDF application.
+  Physical printer output remains untested.
 - Bind the window and toplevel context in the recent-file activation callback.
   GTK3 invokes this callback outside the startup context; opening a recent file
   otherwise exits with "Current window is unavailable." A regression test
