@@ -33,6 +33,8 @@ copytree('/opt/homebrew/share/glib-2.0/schemas',RES/'share/glib-2.0/schemas')
 copytree('/opt/homebrew/share/icons/Adwaita',RES/'share/icons/Adwaita')
 copytree('/opt/homebrew/share/icons/hicolor',RES/'share/icons/hicolor')
 copytree('/opt/homebrew/share/mime',RES/'share/mime')
+# Preserve the upstream artwork, rasterizing each macOS/Retina size from SVG.
+subprocess.run([sys.executable, str(TOOLS/'make-icon.py'), '--output', str(RES/'LeptonEDA.icns')],check=True)
 # Installed scripts contain the build prefix and intentionally select the build
 # tree when LIBLEPTON is set. Replace only their generated bootstrap in the copy.
 for tool in ['schematic','export','netlist','config','shell','cli']:
@@ -66,7 +68,7 @@ example.write_text('(component-library "./sym" "TwoStageAmp example")\n')
 # Native embedded interpreter, before rewriting its complete library closure.
 flags=run('/opt/homebrew/bin/pkg-config','--cflags','--libs','guile-3.0').split()
 subprocess.run(['/usr/bin/clang',str(TOOLS/'bundle-launcher.c'),*flags,'-Wl,-headerpad_max_install_names','-o',str(CONT/'MacOS/LeptonEDA')],check=True)
-plist={'CFBundleExecutable':'LeptonEDA','CFBundleIdentifier':'local.lepton-eda.Quartz','CFBundleName':'Lepton EDA','CFBundleDisplayName':'Lepton EDA','CFBundlePackageType':'APPL','CFBundleVersion':'1','CFBundleShortVersionString':'1.9.18','NSHighResolutionCapable':True,'LSMinimumSystemVersion':run('/usr/bin/sw_vers','-productVersion').split('.')[0]+'.0'}
+plist={'CFBundleExecutable':'LeptonEDA','CFBundleIdentifier':'local.lepton-eda.Quartz','CFBundleName':'Lepton EDA','CFBundleDisplayName':'Lepton EDA','CFBundlePackageType':'APPL','CFBundleIconFile':'LeptonEDA.icns','CFBundleVersion':'1','CFBundleShortVersionString':'1.9.18','NSHighResolutionCapable':True,'LSMinimumSystemVersion':run('/usr/bin/sw_vers','-productVersion').split('.')[0]+'.0'}
 with (CONT/'Info.plist').open('wb') as f: plistlib.dump(plist,f)
 # Dynamic modules are roots too; they are not in otool's static closure.
 roots=[(PREFIX/'lib/liblepton.dylib',FW/'liblepton.11.dylib'),(PREFIX/'lib/libleptongui.dylib',FW/'libleptongui.5.dylib')]

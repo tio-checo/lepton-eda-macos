@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 """Check Mach-O closure, signatures, architecture and symlink containment."""
-import json,pathlib,subprocess,sys
+import json,pathlib,plistlib,subprocess,sys
 app=pathlib.Path(sys.argv[1]).resolve()
 assert app.is_dir()
+with (app/'Contents/Info.plist').open('rb') as stream:
+    info=plistlib.load(stream)
+icon_name=info.get('CFBundleIconFile')
+assert icon_name and pathlib.Path(icon_name).name==icon_name, 'Missing or invalid bundle icon name'
+icon=(app/'Contents/Resources'/icon_name).read_bytes()
+assert icon[:4]==b'icns' and len(icon)>8 and int.from_bytes(icon[4:8],'big')==len(icon), 'Invalid ICNS resource'
 images=[]
 for p in app.rglob('*'):
     if p.is_symlink():
@@ -29,4 +35,4 @@ subprocess.run(['/usr/bin/codesign','--verify','--deep','--strict',str(app)],che
 for p in (app/'Contents/Resources/share/lepton-eda/scheme').rglob('*.scm'):
     text=p.read_text()
     assert '/opt/homebrew' not in text and str(pathlib.Path(__file__).resolve().parents[2]) not in text,p
-print(json.dumps({'result':'PASS','bundle':str(app),'arm64_images':len(images),'no_external_non_Apple_load_commands':True,'no_external_rpaths':True,'all_symlinks_contained':True,'ad_hoc_signature_valid':True},indent=2))
+print(json.dumps({'result':'PASS','bundle':str(app),'bundle_icon':icon_name,'arm64_images':len(images),'no_external_non_Apple_load_commands':True,'no_external_rpaths':True,'all_symlinks_contained':True,'ad_hoc_signature_valid':True},indent=2))

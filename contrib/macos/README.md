@@ -112,6 +112,11 @@ at the current Git commit, a patch of tracked local changes, packaging source,
 dependency license files and Homebrew receipts. Build from a clean committed
 checkout so that the source archive includes all packaging files.
 
+The application uses the upstream `libleptongui/data/lepton-schematic.svg`
+artwork as its Finder/Dock icon. `make-icon.py` renders standard and Retina
+representations from 16 to 1024 pixels into `LeptonEDA.icns`; the bundle audit
+checks the icon resource and its `Info.plist` reference.
+
 The application embeds Guile and includes GTK, fonts/icons support, schemas,
 symbols and the upstream TwoStageAmp example. It does not require Homebrew at
 runtime. Its default profile is `~/Library/Application Support/LeptonEDA-Quartz/`.
